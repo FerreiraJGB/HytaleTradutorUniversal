@@ -1,0 +1,22 @@
+{
+    "Group": "jogandobem",
+    "Name": "TradutorUniversal",
+    "Version": "1.0.1",
+    "Description": "Traduza o chat por jogador usando uma API externa.",
+    "Authors": [
+        {
+            "Name": "Ferreira_"
+        }
+    ],
+    "Website": "",
+    "ServerVersion": "*",
+    "Dependencies": {
+        
+    },
+    "OptionalDependencies": {
+        
+    },
+    "DisabledByDefault": false,
+    "Main": "com.jogandobem.TradutorUniversal",
+    "IncludesAssetPack": false
+}
