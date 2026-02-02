@@ -1,6 +1,7 @@
 package com.jogandobem;
 
 import com.jogandobem.PendingChatStore.PendingChat;
+import com.jogandobem.discord.DiscordIntegration;
 import com.jogandobem.TranslationModels.TranslationResponse;
 import com.jogandobem.TranslationModels.TranslationResult;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -18,14 +19,23 @@ import java.util.UUID;
 public final class TranslationDispatcher {
    private final PendingChatStore pendingStore;
    private final HytaleLogger logger;
+   private final DiscordIntegration discordIntegration;
 
-   public TranslationDispatcher(PendingChatStore pendingStore, HytaleLogger logger) {
+   public TranslationDispatcher(PendingChatStore pendingStore, HytaleLogger logger, DiscordIntegration discordIntegration) {
       this.pendingStore = pendingStore;
       this.logger = logger;
+      this.discordIntegration = discordIntegration;
    }
 
    public void dispatch(String messageId, TranslationResponse response) {
       if (response == null || response.traducao == null || response.traducao.isEmpty()) {
+         return;
+      }
+
+      if (messageId != null && messageId.startsWith("discord:")) {
+         if (this.discordIntegration != null) {
+            this.discordIntegration.handleTranslatedDiscordToGame(messageId, response);
+         }
          return;
       }
 
@@ -58,6 +68,10 @@ public final class TranslationDispatcher {
       }
       if (senderName == null || senderName.isBlank()) {
          senderName = response.jogador;
+      }
+
+      if (this.discordIntegration != null) {
+         this.discordIntegration.handleTranslatedChat(response, playersByName, sender, senderName);
       }
 
       List<TranslationResult> items = response.traducao;

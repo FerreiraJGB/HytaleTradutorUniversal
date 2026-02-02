@@ -2,6 +2,7 @@ package com.jogandobem;
 
 import com.jogandobem.commands.LanguageCommand;
 import com.jogandobem.commands.ReloadCommand;
+import com.jogandobem.discord.DiscordIntegration;
 import com.jogandobem.listeners.ChatListener;
 import com.jogandobem.listeners.PlayerConnectListener;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -24,6 +25,7 @@ public class TradutorUniversal extends JavaPlugin {
    private MessageStore messageStore;
    private IpInfoService ipInfoService;
    private ChatListener chatListener;
+   private DiscordIntegration discordIntegration;
 
    public TradutorUniversal(@Nonnull JavaPluginInit init) {
       super(init);
@@ -37,11 +39,15 @@ public class TradutorUniversal extends JavaPlugin {
       this.messageStore = MessageStore.loadOrCreate(dataDir, this.getLogger());
       this.ipInfoService = new IpInfoService(this.translationConfig, this.getLogger());
       this.pendingChatStore = new PendingChatStore(this.translationConfig.pendingTtlSeconds);
-      this.translationDispatcher = new TranslationDispatcher(this.pendingChatStore, this.getLogger());
+      this.discordIntegration = new DiscordIntegration(dataDir, this.getLogger(), this.languageStore, this.translationConfig);
+      this.translationDispatcher = new TranslationDispatcher(this.pendingChatStore, this.getLogger(), this.discordIntegration);
       this.socketClient = new TranslationSocketClient(this.translationConfig, this.getLogger(), this.translationDispatcher);
+      if (this.discordIntegration != null) {
+         this.discordIntegration.setSocketClient(this.socketClient);
+      }
       this.socketClient.start();
 
-      this.chatListener = new ChatListener(this.translationConfig, this.languageStore, this.socketClient, this.pendingChatStore, this.getLogger());
+      this.chatListener = new ChatListener(this.translationConfig, this.languageStore, this.socketClient, this.pendingChatStore, this.getLogger(), this.discordIntegration);
       this.getEventRegistry().registerGlobal(PlayerChatEvent.class, this.chatListener::onChatEvent);
 
       PlayerConnectListener connectListener = new PlayerConnectListener(this.translationConfig, this.languageStore, this.messageStore, this.ipInfoService, this.getLogger());
@@ -49,6 +55,19 @@ public class TradutorUniversal extends JavaPlugin {
 
       CommandManager.get().register(new LanguageCommand(this.translationConfig, this.languageStore, this.messageStore));
       CommandManager.get().register(new ReloadCommand(this, this.translationConfig, this.languageStore, this.messageStore));
+
+      if (this.discordIntegration != null) {
+         this.discordIntegration.start(this);
+      }
+   }
+
+   protected void shutdown() {
+      if (this.discordIntegration != null) {
+         this.discordIntegration.shutdown();
+      }
+      if (this.pendingChatStore != null) {
+         this.pendingChatStore.shutdown();
+      }
    }
 
    public void reloadTranslation() {
@@ -61,6 +80,9 @@ public class TradutorUniversal extends JavaPlugin {
       }
       if (this.socketClient != null) {
          this.socketClient.reconnectNow();
+      }
+      if (this.discordIntegration != null) {
+         this.discordIntegration.reload(dataDir, this.translationConfig);
       }
    }
 }

@@ -15,3 +15,11 @@ G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\commands\LanguageCommand
 G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\commands\ReloadCommand.java
 G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\listeners\ChatListener.java
 G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\listeners\PlayerConnectListener.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\discord\DiscordBot.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\discord\DiscordChatListener.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\discord\DiscordConfig.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\discord\DiscordGameBroadcaster.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\discord\DiscordIntegration.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\discord\DiscordMessageSanitizer.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\discord\DiscordStatusManager.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\discord\DiscordWebhookManager.java

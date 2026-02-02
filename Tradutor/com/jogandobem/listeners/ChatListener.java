@@ -7,6 +7,7 @@ import com.jogandobem.SocketModels.ChatPayload;
 import com.jogandobem.TranslationConfig;
 import com.jogandobem.TranslationModels.TranslationTarget;
 import com.jogandobem.TranslationSocketClient;
+import com.jogandobem.discord.DiscordIntegration;
 import com.google.gson.Gson;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.logger.HytaleLogger.Api;
@@ -29,14 +30,21 @@ public class ChatListener {
    private final TranslationSocketClient socketClient;
    private final PendingChatStore pendingStore;
    private final HytaleLogger logger;
+   private final DiscordIntegration discordIntegration;
    private final Gson gson = new Gson();
 
-   public ChatListener(TranslationConfig config, LanguageStore languageStore, TranslationSocketClient socketClient, PendingChatStore pendingStore, HytaleLogger logger) {
+   public ChatListener(TranslationConfig config,
+                       LanguageStore languageStore,
+                       TranslationSocketClient socketClient,
+                       PendingChatStore pendingStore,
+                       HytaleLogger logger,
+                       DiscordIntegration discordIntegration) {
       this.config = config;
       this.languageStore = languageStore;
       this.socketClient = socketClient;
       this.pendingStore = pendingStore;
       this.logger = logger;
+      this.discordIntegration = discordIntegration;
    }
 
    public void onChatEvent(PlayerChatEvent chatEvent) {
@@ -84,15 +92,21 @@ public class ChatListener {
          recipientsByName.put(username.toLowerCase(Locale.ROOT), target);
       }
 
+      String senderLanguage = resolveLanguage(sender);
       if (recipientsByName.isEmpty()) {
+         if (this.discordIntegration != null) {
+            this.discordIntegration.handleUntranslatedChat(sender, sender.getUsername(), original, senderLanguage);
+         }
          return;
       }
 
-      String senderLanguage = resolveLanguage(sender);
       if (!shouldTranslate(senderLanguage, recipientsByName)) {
          Message formatted = formatMessage(chatEvent, sender, original);
          for (PlayerRef target : recipientsByName.values()) {
             sendMessageSafe(target, formatted);
+         }
+         if (this.discordIntegration != null) {
+            this.discordIntegration.handleUntranslatedChat(sender, sender.getUsername(), original, senderLanguage);
          }
          return;
       }
