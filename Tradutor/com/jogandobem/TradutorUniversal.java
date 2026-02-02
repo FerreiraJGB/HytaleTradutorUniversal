@@ -21,6 +21,8 @@ public class TradutorUniversal extends JavaPlugin {
    private PendingChatStore pendingChatStore;
    private TranslationDispatcher translationDispatcher;
    private TranslationSocketClient socketClient;
+   private MessageStore messageStore;
+   private IpInfoService ipInfoService;
    private ChatListener chatListener;
 
    public TradutorUniversal(@Nonnull JavaPluginInit init) {
@@ -32,6 +34,8 @@ public class TradutorUniversal extends JavaPlugin {
       Path dataDir = this.getDataDirectory();
       this.translationConfig = TranslationConfig.loadOrCreate(dataDir, this.getLogger());
       this.languageStore = LanguageStore.loadOrCreate(dataDir, this.getLogger());
+      this.messageStore = MessageStore.loadOrCreate(dataDir, this.getLogger());
+      this.ipInfoService = new IpInfoService(this.translationConfig, this.getLogger());
       this.pendingChatStore = new PendingChatStore(this.translationConfig.pendingTtlSeconds);
       this.translationDispatcher = new TranslationDispatcher(this.pendingChatStore, this.getLogger());
       this.socketClient = new TranslationSocketClient(this.translationConfig, this.getLogger(), this.translationDispatcher);
@@ -40,11 +44,11 @@ public class TradutorUniversal extends JavaPlugin {
       this.chatListener = new ChatListener(this.translationConfig, this.languageStore, this.socketClient, this.pendingChatStore, this.getLogger());
       this.getEventRegistry().registerGlobal(PlayerChatEvent.class, this.chatListener::onChatEvent);
 
-      PlayerConnectListener connectListener = new PlayerConnectListener(this.translationConfig, this.languageStore, this.getLogger());
+      PlayerConnectListener connectListener = new PlayerConnectListener(this.translationConfig, this.languageStore, this.messageStore, this.ipInfoService, this.getLogger());
       this.getEventRegistry().registerGlobal(PlayerConnectEvent.class, connectListener::onPlayerConnect);
 
-      CommandManager.get().register(new LanguageCommand(this.translationConfig, this.languageStore));
-      CommandManager.get().register(new ReloadCommand(this));
+      CommandManager.get().register(new LanguageCommand(this.translationConfig, this.languageStore, this.messageStore));
+      CommandManager.get().register(new ReloadCommand(this, this.translationConfig, this.languageStore, this.messageStore));
    }
 
    public void reloadTranslation() {
@@ -52,6 +56,9 @@ public class TradutorUniversal extends JavaPlugin {
       TranslationConfig refreshed = TranslationConfig.loadOrCreate(dataDir, this.getLogger());
       this.translationConfig.applyFrom(refreshed);
       this.languageStore.reload();
+      if (this.messageStore != null) {
+         this.messageStore.reload();
+      }
       if (this.socketClient != null) {
          this.socketClient.reconnectNow();
       }

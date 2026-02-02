@@ -57,7 +57,18 @@ public final class LanguageStore {
       return entry == null ? null : entry.language;
    }
 
+   public boolean hasEntry(UUID uuid) {
+      if (uuid == null) {
+         return false;
+      }
+      return this.players.containsKey(uuid.toString());
+   }
+
    public void setLanguage(UUID uuid, String username, String language) {
+      setLanguage(uuid, username, language, null);
+   }
+
+   public void setLanguage(UUID uuid, String username, String language, String ip) {
       if (uuid == null) {
          return;
       }
@@ -69,6 +80,12 @@ public final class LanguageStore {
       }
 
       PlayerLanguage entry = new PlayerLanguage();
+      PlayerLanguage existing = this.players.get(key);
+      if (existing != null && (ip == null || ip.isBlank())) {
+         entry.ip = existing.ip;
+      } else {
+         entry.ip = ip == null ? "" : ip;
+      }
       entry.username = username == null ? "" : username;
       entry.language = language.trim();
       this.players.put(key, entry);
@@ -146,5 +163,6 @@ public final class LanguageStore {
    public static final class PlayerLanguage {
       public String username;
       public String language;
+      public String ip;
    }
 }

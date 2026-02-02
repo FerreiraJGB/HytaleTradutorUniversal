@@ -1,0 +1,17 @@
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\AutoLanguageMappings.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\IpInfoService.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\LanguageCatalog.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\LanguageStore.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\MessageStore.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\PendingChatStore.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\SocketModels.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\TradutorUniversal.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\TranslationConfig.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\TranslationDispatcher.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\TranslationModels.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\TranslationService.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\TranslationSocketClient.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\commands\LanguageCommand.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\commands\ReloadCommand.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\listeners\ChatListener.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\listeners\PlayerConnectListener.java

@@ -39,6 +39,9 @@ public final class TranslationConfig {
    @SerializedName("warn_message")
    public String warnMessage;
 
+   @SerializedName("ipinfo_token")
+   public String ipinfoToken;
+
    @SerializedName("api_timeout_ms")
    public int apiTimeoutMs;
 
@@ -85,6 +88,10 @@ public final class TranslationConfig {
       return this.wsUrl != null && !this.wsUrl.isBlank() && this.serverId != null && !this.serverId.isBlank();
    }
 
+   public boolean hasIpInfoToken() {
+      return this.ipinfoToken != null && !this.ipinfoToken.isBlank();
+   }
+
    public void applyFrom(TranslationConfig other) {
       if (other == null) {
          return;
@@ -97,6 +104,7 @@ public final class TranslationConfig {
       this.defaultLanguage = other.defaultLanguage;
       this.warnOnJoin = other.warnOnJoin;
       this.warnMessage = other.warnMessage;
+      this.ipinfoToken = other.ipinfoToken;
       this.apiTimeoutMs = other.apiTimeoutMs;
       this.wsReconnectSeconds = other.wsReconnectSeconds;
       this.pendingTtlSeconds = other.pendingTtlSeconds;
@@ -123,6 +131,7 @@ public final class TranslationConfig {
       cfg.defaultLanguage = "auto";
       cfg.warnOnJoin = true;
       cfg.warnMessage = "Servidor com traducao automatica. Use /l <codigo> para escolher o idioma.";
+      cfg.ipinfoToken = "";
       cfg.apiTimeoutMs = 5000;
       cfg.wsReconnectSeconds = 3;
       cfg.pendingTtlSeconds = 30;
@@ -150,6 +159,9 @@ public final class TranslationConfig {
       }
       if (this.warnMessage == null || this.warnMessage.isBlank()) {
          this.warnMessage = defaults.warnMessage;
+      }
+      if (this.ipinfoToken == null) {
+         this.ipinfoToken = defaults.ipinfoToken;
       }
       if (this.apiTimeoutMs <= 0) {
          this.apiTimeoutMs = defaults.apiTimeoutMs;
