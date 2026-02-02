@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 public final class TranslationDispatcher {
    private final PendingChatStore pendingStore;
@@ -36,6 +37,29 @@ public final class TranslationDispatcher {
             : pending.formatter;
 
       Map<String, PlayerRef> playersByName = buildPlayersByName();
+      if (sender == null) {
+         String responseUuid = response.jogadorUuid;
+         if (responseUuid != null && !responseUuid.isBlank()) {
+            try {
+               UUID uuid = UUID.fromString(responseUuid);
+               sender = Universe.get().getPlayer(uuid);
+            } catch (IllegalArgumentException ignored) {
+            }
+         }
+         if (sender == null) {
+            String responseName = response.jogador;
+            if (responseName != null && !responseName.isBlank()) {
+               sender = playersByName.get(responseName.toLowerCase(Locale.ROOT));
+            }
+         }
+      }
+      if (sender != null && (senderName == null || senderName.isBlank())) {
+         senderName = sender.getUsername();
+      }
+      if (senderName == null || senderName.isBlank()) {
+         senderName = response.jogador;
+      }
+
       List<TranslationResult> items = response.traducao;
       for (TranslationResult item : items) {
          if (item == null) {
@@ -56,7 +80,14 @@ public final class TranslationDispatcher {
          if (text == null) {
             continue;
          }
-         Message message = sender != null ? formatter.format(sender, text) : Message.raw(text);
+         Message message;
+         if (sender != null) {
+            message = formatter.format(sender, text);
+         } else if (senderName != null && !senderName.isBlank()) {
+            message = Message.raw(senderName + ": " + text);
+         } else {
+            message = Message.raw(text);
+         }
          try {
             target.sendMessage(message);
          } catch (Exception e) {

@@ -89,6 +89,13 @@ public class ChatListener {
       }
 
       String senderLanguage = resolveLanguage(sender);
+      if (!shouldTranslate(senderLanguage, recipientsByName)) {
+         Message formatted = formatMessage(chatEvent, sender, original);
+         for (PlayerRef target : recipientsByName.values()) {
+            sendMessageSafe(target, formatted);
+         }
+         return;
+      }
       List<PlayerRef> onlinePlayers = Universe.get().getPlayers();
       List<TranslationTarget> onlineList = buildOnlineList(onlinePlayers);
       if (onlineList.isEmpty()) {
@@ -160,6 +167,29 @@ public class ChatListener {
          lang = "auto";
       }
       return lang.trim();
+   }
+
+   private boolean shouldTranslate(String senderLanguage, Map<String, PlayerRef> recipientsByName) {
+      String base = normalizeLanguage(senderLanguage);
+      for (PlayerRef player : recipientsByName.values()) {
+         String lang = normalizeLanguage(resolveLanguage(player));
+         if (base == null) {
+            base = lang;
+            continue;
+         }
+         if (lang != null && !base.equals(lang)) {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   private static String normalizeLanguage(String language) {
+      if (language == null) {
+         return null;
+      }
+      String normalized = language.trim().toLowerCase(Locale.ROOT);
+      return normalized.isEmpty() ? null : normalized;
    }
 
    private static boolean sameUuid(UUID a, UUID b) {

@@ -35,6 +35,8 @@ Você é um tradutor de chat que traduz o chat de um servidor de Hytale. Traduza
 
 Realize a tradução da melhor forma possível adaptando gírias e expressões únicas para uma compatível para o idioma destino quando necessário.
 
+A lista de jogadores abaixo contém no máximo 1 jogador por idioma. Traduza para o idioma indicado em cada entrada.
+
 O texto para jogadores falantes do mesmo idioma deve ser enviado **EXATAMENTE** igual ao original sem nenhuma alteração.
 
 Retorne SOMENTE um JSON válido no formato:
@@ -66,35 +68,116 @@ def parse_json_safe(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def normalize_language(lang: Any) -> str:
+    if not isinstance(lang, str):
+        return ""
+    return lang.strip().lower()
+
+
+def dedupe_players_by_language(
+    jogadores_online: List[Dict[str, Any]]
+) -> tuple[list[dict[str, str]], dict[str, list[str]], dict[str, str]]:
+    deduped: list[dict[str, str]] = []
+    grouped: dict[str, list[str]] = {}
+    rep_to_lang: dict[str, str] = {}
+    seen_langs: set[str] = set()
+    if not isinstance(jogadores_online, list):
+        return deduped, grouped, rep_to_lang
+
+    for item in jogadores_online:
+        if not isinstance(item, dict):
+            continue
+        jogador = item.get("jogador")
+        if not isinstance(jogador, str) or not jogador:
+            continue
+        idioma = item.get("idioma")
+        lang_key = normalize_language(idioma)
+        grouped.setdefault(lang_key, []).append(jogador)
+        if lang_key in seen_langs:
+            continue
+        seen_langs.add(lang_key)
+        rep_to_lang[jogador.strip().lower()] = lang_key
+        deduped.append({"jogador": jogador, "idioma": idioma if isinstance(idioma, str) else ""})
+
+    return deduped, grouped, rep_to_lang
+
+
+def validate_translation_output(data: Optional[Dict[str, Any]], expected_names: List[str]) -> bool:
+    if not isinstance(data, dict):
+        return False
+    items = data.get("traducao")
+    if not isinstance(items, list):
+        return False
+    if not expected_names:
+        return True
+    names: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            return False
+        jogador = item.get("jogador")
+        texto = item.get("texto_traduzido")
+        if not isinstance(jogador, str) or not jogador:
+            return False
+        if not isinstance(texto, str):
+            return False
+        names.add(jogador.strip().lower())
+    for expected in expected_names:
+        if expected.strip().lower() not in names:
+            return False
+    return True
+
+
+def build_translation_maps(
+    data: Optional[Dict[str, Any]],
+    rep_to_lang: Dict[str, str],
+) -> tuple[dict[str, str], dict[str, str]]:
+    by_name: dict[str, str] = {}
+    by_lang: dict[str, str] = {}
+    items = data.get("traducao") if isinstance(data, dict) else None
+    if isinstance(items, list):
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            jogador = item.get("jogador")
+            texto = item.get("texto_traduzido")
+            if not isinstance(jogador, str) or not jogador:
+                continue
+            if not isinstance(texto, str):
+                texto = ""
+            name_key = jogador.strip().lower()
+            by_name[name_key] = texto
+            lang_key = rep_to_lang.get(name_key)
+            if lang_key is not None:
+                by_lang[lang_key] = texto
+    return by_name, by_lang
+
+
 def normalize_response(
     data: Optional[Dict[str, Any]],
     jogadores_online: List[Dict[str, Any]],
     texto_original: str,
     idioma_original: str,
+    rep_to_lang: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
-    traducao_list = []
-    data_list = data.get("traducao") if isinstance(data, dict) else None
-    if isinstance(data_list, list):
-        for item in data_list:
-            if not isinstance(item, dict):
-                continue
-            jogador = item.get("jogador")
-            texto = item.get("texto_traduzido")
-            if isinstance(jogador, str) and jogador:
-                traducao_list.append({"jogador": jogador, "texto_traduzido": texto if isinstance(texto, str) else ""})
-
-    by_name = {i["jogador"]: i["texto_traduzido"] for i in traducao_list if i.get("jogador")}
+    rep_map = rep_to_lang or {}
+    by_name, by_lang = build_translation_maps(data, rep_map)
     output = []
+    base_lang = normalize_language(idioma_original)
 
     for p in jogadores_online:
         jogador = p.get("jogador")
         idioma = p.get("idioma")
         if not isinstance(jogador, str) or not jogador:
             continue
-        if isinstance(idioma, str) and isinstance(idioma_original, str) and idioma.strip().lower() == idioma_original.strip().lower():
+        lang_key = normalize_language(idioma)
+        if lang_key and base_lang and lang_key == base_lang:
+            texto = texto_original
+        elif not lang_key and not base_lang:
             texto = texto_original
         else:
-            texto = by_name.get(jogador, "")
+            texto = by_name.get(jogador.strip().lower(), "")
+            if not isinstance(texto, str) or not texto:
+                texto = by_lang.get(lang_key, "")
             if not isinstance(texto, str) or not texto:
                 texto = texto_original
         output.append({"jogador": jogador, "texto_traduzido": texto})
@@ -107,11 +190,15 @@ def translate_with_openai(
     jogadores_online: List[Dict[str, Any]],
     idioma_original: str,
 ) -> Dict[str, Any]:
+    jogadores_online = jogadores_online if isinstance(jogadores_online, list) else []
+    deduped, _, rep_to_lang = dedupe_players_by_language(jogadores_online)
     if not OPENAI_API_KEY or client is None:
         logger.warning("OPENAI_API_KEY nao configurada; retornando texto original.")
-        return normalize_response({}, jogadores_online, texto_original, idioma_original)
+        return normalize_response({}, jogadores_online, texto_original, idioma_original, rep_to_lang)
+    if not deduped:
+        return {"traducao": []}
 
-    prompt = build_prompt(texto_original, jogadores_online)
+    prompt = build_prompt(texto_original, deduped)
     response_format = {
         "type": "json_schema",
         "name": "chat_translation",
@@ -137,26 +224,42 @@ def translate_with_openai(
         },
         "strict": True,
     }
-    logger.info("OpenAI request: model=%s, jogadores=%d, idioma_original=%s", MODEL, len(jogadores_online), idioma_original)
-    start = time.time()
-    try:
-        result = client.responses.create(
-            model=MODEL,
-            instructions="Responda somente com JSON valido.",
-            input=prompt,
-            text={"format": response_format},
-        )
-        output_text = result.output_text if hasattr(result, "output_text") else ""
-        logger.debug("OpenAI raw output: %s", truncate(output_text, 2000))
-        parsed = parse_json_safe(output_text)
-        if parsed is None:
-            logger.warning("OpenAI output nao e JSON valido; usando fallback.")
-        normalized = normalize_response(parsed or {}, jogadores_online, texto_original, idioma_original)
-        logger.info("OpenAI ok em %.2fs, traducoes=%d", time.time() - start, len(normalized.get("traducao", [])))
-        return normalized
-    except Exception as e:
-        logger.exception("OpenAI erro: %s", e)
-        return normalize_response({}, jogadores_online, texto_original, idioma_original)
+    expected_names = [item.get("jogador") for item in deduped if isinstance(item, dict) and item.get("jogador")]
+    logger.info(
+        "OpenAI request: model=%s, jogadores=%d (dedupe=%d), idioma_original=%s",
+        MODEL,
+        len(jogadores_online),
+        len(deduped),
+        idioma_original,
+    )
+
+    for attempt in range(1, 3):
+        start = time.time()
+        try:
+            result = client.responses.create(
+                model=MODEL,
+                instructions="Responda somente com JSON valido.",
+                input=prompt,
+                text={"format": response_format},
+            )
+            output_text = result.output_text if hasattr(result, "output_text") else ""
+            logger.debug("OpenAI raw output: %s", truncate(output_text, 2000))
+            parsed = parse_json_safe(output_text)
+            if not validate_translation_output(parsed, expected_names):
+                logger.warning("OpenAI output invalido (tentativa %d/2)", attempt)
+                continue
+            normalized = normalize_response(parsed or {}, jogadores_online, texto_original, idioma_original, rep_to_lang)
+            logger.info(
+                "OpenAI ok em %.2fs, traducoes=%d",
+                time.time() - start,
+                len(normalized.get("traducao", [])),
+            )
+            return normalized
+        except Exception as e:
+            logger.exception("OpenAI erro na tentativa %d/2: %s", attempt, e)
+
+    logger.warning("OpenAI falhou nas tentativas; usando fallback.")
+    return normalize_response({}, jogadores_online, texto_original, idioma_original, rep_to_lang)
 
 
 class ConnectionManager:
@@ -210,6 +313,7 @@ async def handle_chat_message(server_id: Optional[str], websocket: WebSocket, pa
     jogadores_online = payload.get("jogadores_online") or []
     message_id = payload.get("message_id") or ""
     jogador = payload.get("jogador") or ""
+    jogador_uuid = payload.get("jogador_uuid") or ""
 
     logger.info(
         "Chat recebido: server_id=%s message_id=%s jogador=%s idioma_original=%s jogadores=%d texto_len=%d",
@@ -232,6 +336,8 @@ async def handle_chat_message(server_id: Optional[str], websocket: WebSocket, pa
         "type": "translations",
         "server_id": server_id or "",
         "message_id": message_id,
+        "jogador": jogador,
+        "jogador_uuid": jogador_uuid,
         "traducao": traducao.get("traducao", []),
     }
     logger.debug("WS send translations: %s", truncate(json.dumps(response, ensure_ascii=False), 1000))

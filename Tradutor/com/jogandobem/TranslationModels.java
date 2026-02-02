@@ -33,6 +33,12 @@ public final class TranslationModels {
    }
 
    public static final class TranslationResponse {
+      @SerializedName("jogador")
+      public String jogador;
+
+      @SerializedName("jogador_uuid")
+      public String jogadorUuid;
+
       @SerializedName("traducao")
       public List<TranslationResult> traducao;
    }
