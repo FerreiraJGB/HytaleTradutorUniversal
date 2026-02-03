@@ -18,6 +18,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -48,6 +49,7 @@ public final class DiscordIntegration {
    private final ConcurrentHashMap<String, DiscordPending> pendingDiscord = new ConcurrentHashMap<>();
    private final ScheduledExecutorService pendingScheduler = Executors.newSingleThreadScheduledExecutor();
    private final Gson gson = new Gson();
+   private static final String DISCORD_TARGET_PREFIX = "__discord__:";
 
    public DiscordIntegration(java.nio.file.Path dataDir,
                              HytaleLogger logger,
@@ -130,6 +132,68 @@ public final class DiscordIntegration {
       if (this.broadcaster != null) {
          this.broadcaster.setConfig(refreshed);
       }
+   }
+
+   public boolean hasChannelForLanguage(String language) {
+      if (this.config == null) {
+         return false;
+      }
+      if (this.config.useWebhookForChat && this.webhookManager != null && this.webhookManager.isEnabled()) {
+         return true;
+      }
+      String channelId = this.config.getChannelId(language);
+      return channelId != null && !channelId.isBlank();
+   }
+
+   public boolean shouldTranslateForDiscord(String senderLanguage) {
+      if (this.config == null || this.config.channelsIds == null || this.config.channelsIds.isEmpty()) {
+         return false;
+      }
+      String base = normalizeLanguage(senderLanguage);
+      for (Map.Entry<String, String> entry : this.config.channelsIds.entrySet()) {
+         String language = entry.getKey();
+         String channelId = entry.getValue();
+         if (language == null || language.isBlank() || !isChannelIdValid(channelId)) {
+            continue;
+         }
+         String normalized = normalizeLanguage(language);
+         if (normalized == null) {
+            continue;
+         }
+         if (base == null || !base.equals(normalized)) {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   public boolean appendDiscordTargets(List<TranslationTarget> targets, String senderLanguage) {
+      if (targets == null || this.config == null || this.config.channelsIds == null || this.config.channelsIds.isEmpty()) {
+         return false;
+      }
+      String base = normalizeLanguage(senderLanguage);
+      Set<String> seen = new LinkedHashSet<>();
+      boolean added = false;
+      for (Map.Entry<String, String> entry : this.config.channelsIds.entrySet()) {
+         String language = entry.getKey();
+         String channelId = entry.getValue();
+         if (language == null || language.isBlank() || !isChannelIdValid(channelId)) {
+            continue;
+         }
+         String normalized = normalizeLanguage(language);
+         if (normalized == null || !seen.add(normalized)) {
+            continue;
+         }
+         if (base != null && base.equals(normalized)) {
+            continue;
+         }
+         TranslationTarget target = new TranslationTarget();
+         target.jogador = buildDiscordTargetName(normalized);
+         target.idioma = language.trim();
+         targets.add(target);
+         added = true;
+      }
+      return added;
    }
 
    public void handleIncomingDiscordMessage(String channelId, String username, String message) {
@@ -266,24 +330,16 @@ public final class DiscordIntegration {
          if (targetName == null || targetName.isBlank()) {
             continue;
          }
-         if (playersByName == null) {
-            continue;
-         }
-         PlayerRef target = playersByName.get(targetName.toLowerCase(Locale.ROOT));
-         if (target == null) {
-            continue;
-         }
          String text = item.textoTraduzido;
          if (text == null) {
             continue;
          }
-         String language = resolveLanguage(target);
-         String normalized = normalizeLanguage(language);
-         if (normalized == null) {
+         String language = parseDiscordTargetLanguage(targetName);
+         if (language == null) {
             continue;
          }
-         if (!languageToText.containsKey(normalized)) {
-            languageToText.put(normalized, text);
+         if (!languageToText.containsKey(language)) {
+            languageToText.put(language, text);
          }
       }
 
@@ -293,6 +349,9 @@ public final class DiscordIntegration {
 
       String resolvedSender = resolveSenderName(sender, senderName, response);
       for (Map.Entry<String, String> entry : languageToText.entrySet()) {
+         if (!hasChannelForLanguage(entry.getKey())) {
+            continue;
+         }
          sendChatToDiscord(resolvedSender, entry.getValue(), entry.getKey());
       }
    }
@@ -495,6 +554,40 @@ public final class DiscordIntegration {
       }
       String normalized = language.trim().toLowerCase(Locale.ROOT);
       return normalized.isEmpty() ? null : normalized;
+   }
+
+   private static boolean isChannelIdValid(String id) {
+      if (id == null || id.isBlank()) {
+         return false;
+      }
+      for (int i = 0; i < id.length(); i++) {
+         if (!Character.isDigit(id.charAt(i))) {
+            return false;
+         }
+      }
+      return true;
+   }
+
+   private static String buildDiscordTargetName(String language) {
+      String normalized = normalizeLanguage(language);
+      if (normalized == null) {
+         return null;
+      }
+      return DISCORD_TARGET_PREFIX + normalized;
+   }
+
+   private static String parseDiscordTargetLanguage(String targetName) {
+      if (targetName == null) {
+         return null;
+      }
+      if (!targetName.startsWith(DISCORD_TARGET_PREFIX)) {
+         return null;
+      }
+      String language = targetName.substring(DISCORD_TARGET_PREFIX.length());
+      if (language.isBlank()) {
+         return null;
+      }
+      return normalizeLanguage(language);
    }
 
    private JDA getJda() {

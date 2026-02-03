@@ -93,27 +93,33 @@ public class ChatListener {
       }
 
       String senderLanguage = resolveLanguage(sender);
-      if (recipientsByName.isEmpty()) {
-         if (this.discordIntegration != null) {
-            this.discordIntegration.handleUntranslatedChat(sender, sender.getUsername(), original, senderLanguage);
-         }
-         return;
-      }
+      boolean playerTranslationNeeded = !recipientsByName.isEmpty() && shouldTranslate(senderLanguage, recipientsByName);
 
-      if (!shouldTranslate(senderLanguage, recipientsByName)) {
+      if (!playerTranslationNeeded && !recipientsByName.isEmpty()) {
          Message formatted = formatMessage(chatEvent, sender, original);
          for (PlayerRef target : recipientsByName.values()) {
             sendMessageSafe(target, formatted);
          }
-         if (this.discordIntegration != null) {
-            this.discordIntegration.handleUntranslatedChat(sender, sender.getUsername(), original, senderLanguage);
-         }
-         return;
       }
-      List<PlayerRef> onlinePlayers = Universe.get().getPlayers();
-      List<TranslationTarget> onlineList = buildOnlineList(onlinePlayers);
+
+      if (this.discordIntegration != null && this.discordIntegration.hasChannelForLanguage(senderLanguage)) {
+         this.discordIntegration.handleUntranslatedChat(sender, sender.getUsername(), original, senderLanguage);
+      }
+
+      List<TranslationTarget> onlineList = new ArrayList<>();
+      if (playerTranslationNeeded) {
+         List<PlayerRef> onlinePlayers = Universe.get().getPlayers();
+         onlineList.addAll(buildOnlineList(onlinePlayers));
+         if (onlineList.isEmpty()) {
+            onlineList.addAll(buildOnlineListFromRecipients(recipientsByName, sender));
+         }
+      }
+      if (this.discordIntegration != null) {
+         this.discordIntegration.appendDiscordTargets(onlineList, senderLanguage);
+      }
+
       if (onlineList.isEmpty()) {
-         onlineList = buildOnlineListFromRecipients(recipientsByName, sender);
+         return;
       }
 
       if (!this.config.isApiConfigured()) {

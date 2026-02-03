@@ -157,17 +157,58 @@ public class PlayerConnectListener {
             if (raw == null || raw.isBlank()) {
                return null;
             }
-            if (raw.contains("QuicStreamAddress")) {
-               return null;
+            String candidate = null;
+            if (raw.contains("QuicStreamAddress") || raw.contains("remote=")) {
+               int remoteIdx = raw.indexOf("remote=");
+               if (remoteIdx >= 0) {
+                  int start = remoteIdx + "remote=".length();
+                  int end = raw.indexOf(',', start);
+                  if (end < 0) {
+                     end = raw.indexOf('}', start);
+                  }
+                  if (end < 0) {
+                     end = raw.length();
+                  }
+                  candidate = raw.substring(start, end).trim();
+               }
             }
-            if (raw.startsWith("/")) {
-               raw = raw.substring(1);
+            if (candidate == null || candidate.isBlank()) {
+               candidate = raw;
             }
-            int colon = raw.lastIndexOf(':');
-            if (colon > 0 && raw.indexOf(':') == colon) {
-               raw = raw.substring(0, colon);
+            if (candidate.contains("QuicStreamAddress")) {
+               int slash = candidate.indexOf('/');
+               if (slash >= 0) {
+                  int end = candidate.indexOf(',', slash);
+                  if (end < 0) {
+                     end = candidate.indexOf('}', slash);
+                  }
+                  if (end < 0) {
+                     end = candidate.length();
+                  }
+                  candidate = candidate.substring(slash + 1, end).trim();
+               } else {
+                  return null;
+               }
             }
-            return raw;
+            if (candidate.startsWith("/")) {
+               candidate = candidate.substring(1);
+            }
+            int zoneIdx = candidate.indexOf('%');
+            if (zoneIdx > 0) {
+               candidate = candidate.substring(0, zoneIdx);
+            }
+            if (candidate.startsWith("[") && candidate.contains("]")) {
+               int endBracket = candidate.indexOf(']');
+               if (endBracket > 1) {
+                  candidate = candidate.substring(1, endBracket);
+               }
+            } else {
+               int colon = candidate.lastIndexOf(':');
+               if (colon > 0 && candidate.indexOf(':') == colon) {
+                  candidate = candidate.substring(0, colon);
+               }
+            }
+            return candidate.isBlank() ? null : candidate;
          }
       } catch (Exception e) {
          ((Api) this.logger.atWarning().withCause(e)).log("ChatTranslation failed to resolve player ip");
