@@ -32,6 +32,11 @@ public final class IpInfoService {
          return CompletableFuture.completedFuture(null);
       }
       String sanitizedIp = sanitizeIp(ip);
+      if (sanitizedIp == null || sanitizedIp.isBlank()) {
+         ((Api) this.logger.atWarning()).log("ChatTranslation IPInfo lookup skipped: player ip missing or invalid");
+         return CompletableFuture.completedFuture(null);
+      }
+      ((Api) this.logger.atInfo()).log("ChatTranslation IPInfo lookup using ip=" + sanitizedIp);
       String url = buildUrl(sanitizedIp, this.config.ipinfoToken);
       URI uri;
       try {

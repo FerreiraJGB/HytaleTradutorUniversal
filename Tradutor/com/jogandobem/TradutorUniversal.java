@@ -39,7 +39,12 @@ public class TradutorUniversal extends JavaPlugin {
       this.messageStore = MessageStore.loadOrCreate(dataDir, this.getLogger());
       this.ipInfoService = new IpInfoService(this.translationConfig, this.getLogger());
       this.pendingChatStore = new PendingChatStore(this.translationConfig.pendingTtlSeconds);
-      this.discordIntegration = new DiscordIntegration(dataDir, this.getLogger(), this.languageStore, this.translationConfig);
+      if (isDiscordAvailable()) {
+         this.discordIntegration = new DiscordIntegration(dataDir, this.getLogger(), this.languageStore, this.translationConfig);
+      } else {
+         ((Api)LOGGER.atWarning()).log("Discord integration disabled (JDA not found on classpath).");
+         this.discordIntegration = null;
+      }
       this.translationDispatcher = new TranslationDispatcher(this.pendingChatStore, this.getLogger(), this.discordIntegration);
       this.socketClient = new TranslationSocketClient(this.translationConfig, this.getLogger(), this.translationDispatcher);
       if (this.discordIntegration != null) {
@@ -57,7 +62,12 @@ public class TradutorUniversal extends JavaPlugin {
       CommandManager.get().register(new ReloadCommand(this, this.translationConfig, this.languageStore, this.messageStore));
 
       if (this.discordIntegration != null) {
-         this.discordIntegration.start(this);
+         try {
+            this.discordIntegration.start(this);
+         } catch (NoClassDefFoundError e) {
+            ((Api)LOGGER.atWarning().withCause(e)).log("Discord integration disabled (missing dependency).");
+            this.discordIntegration = null;
+         }
       }
    }
 
@@ -82,7 +92,24 @@ public class TradutorUniversal extends JavaPlugin {
          this.socketClient.reconnectNow();
       }
       if (this.discordIntegration != null) {
-         this.discordIntegration.reload(dataDir, this.translationConfig);
+         try {
+            this.discordIntegration.reload(dataDir, this.translationConfig);
+         } catch (NoClassDefFoundError e) {
+            ((Api)LOGGER.atWarning().withCause(e)).log("Discord integration disabled (missing dependency).");
+            this.discordIntegration = null;
+         }
+      }
+   }
+
+   private boolean isDiscordAvailable() {
+      try {
+         ClassLoader loader = this.getClass().getClassLoader();
+         Class.forName("net.dv8tion.jda.api.JDABuilder", false, loader);
+         return true;
+      } catch (ClassNotFoundException e) {
+         return false;
+      } catch (NoClassDefFoundError e) {
+         return false;
       }
    }
 }
