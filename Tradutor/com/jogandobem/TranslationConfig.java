@@ -132,7 +132,7 @@ public final class TranslationConfig {
       cfg.warnOnJoin = true;
       cfg.warnMessage = "Servidor com traducao automatica. Use /l <codigo> para escolher o idioma.";
       cfg.ipinfoToken = "";
-      cfg.apiTimeoutMs = 5000;
+      cfg.apiTimeoutMs = 60000;
       cfg.wsReconnectSeconds = 3;
       cfg.pendingTtlSeconds = 30;
       return cfg;

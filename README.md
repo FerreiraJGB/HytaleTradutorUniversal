@@ -28,6 +28,8 @@ Estrutura do repositório
 │  └─ .env.example
 ├─ Tradutor/
 │  ├─ manifest.json
+│  ├─ META-INF/
+│  ├─ sources.txt
 │  └─ com/jogandobem/... (código-fonte Java)
 └─ README.md
 ```
@@ -37,7 +39,13 @@ Requisitos
 
 Plugin (Hytale):
 - Servidor Hytale com suporte a plugins Java.
-- Java compatível com a versão do servidor.
+- Java 21 (as classes são compiladas com major version 65).
+
+Discord (opcional):
+- Dependências da JDA no classpath **ou** no próprio `.jar` (fat jar).
+
+Auto-detecção por IP (opcional):
+- Token do ipinfo.io (campo `ipinfo_token`).
 
 API (FastAPI):
 - Python 3.x com `pip`.
@@ -88,7 +96,7 @@ O plugin usa manifesto de mod Hytale em `Tradutor/manifest.json`:
 - Versão: `1.0.1`
 - Classe principal: `com.jogandobem.TradutorUniversal`
 
-Copie o plugin compilado para o local de mods do seu servidor Hytale conforme o fluxo de instalação que você já utiliza. O código-fonte está em `Tradutor/com/jogandobem`.
+Copie o plugin compilado para o local de mods do seu servidor Hytale conforme o fluxo de instalação que você já utiliza.
 
 Configuração do plugin
 ----------------------
@@ -104,7 +112,8 @@ Na primeira execução, o plugin cria `translator_config.json` na pasta de dados
   "server_secret": "",
   "default_language": "auto",
   "warn_on_join": true,
-  "warn_message": "Servidor com tradução automática. Use /l <idioma + país> para escolher o idioma. Exemplo: /l pt-BR",
+  "warn_message": "Servidor com traducao automatica. Use /l <codigo> para escolher o idioma.",
+  "ipinfo_token": "",
   "api_timeout_ms": 60000,
   "ws_reconnect_seconds": 3,
   "pending_ttl_seconds": 30
@@ -120,11 +129,52 @@ Campos e função:
 - `default_language`: idioma padrão quando o jogador não escolhe nenhum (ex.: `auto`, `pt`, `en`).
 - `warn_on_join`: envia aviso de tradução ao entrar.
 - `warn_message`: texto do aviso.
+- `ipinfo_token`: token do ipinfo.io para auto-detecção por IP.
 - `api_timeout_ms`: timeout de HTTP (caso use `TranslationService`).
 - `ws_reconnect_seconds`: intervalo de reconexão do WebSocket.
 - `pending_ttl_seconds`: tempo máximo aguardando resposta de tradução por mensagem.
 
-O plugin também cria `languages.json` com preferência de idioma por jogador.
+O plugin também cria:
+- `languages.json` (idioma e IP por jogador).
+- `messages.json` (textos/idiomas do plugin).
+- `discord.json` (configuração do Discord).
+
+Auto-detecção por IP (ipinfo.io)
+--------------------------------
+
+- Só roda se `ipinfo_token` estiver configurado.
+- Só roda **para jogadores sem entrada** em `languages.json`.
+- Se não conseguir resolver o IP do jogador, **não consulta** o ipinfo e registra log de erro.
+- Para forçar nova detecção: use `/l auto` ou remova a entrada do jogador em `languages.json`.
+
+Discord (opcional)
+------------------
+
+O plugin cria `discord.json` na pasta de dados do plugin. Exemplo mínimo:
+
+```
+{
+  "botToken": "SEU_TOKEN_AQUI",
+  "channelsIds": {
+    "pt-BR": "id_canal_discord",
+    "en-US": "outro_id_canal_discord"
+  },
+  "gameToDiscordFormat": "**[{player}]**: {message}",
+  "discordToGameFormat": "[DISCORD] {user}: {message}",
+  "serverEventsEnabled": true,
+  "playerJoinLeaveEnabled": false,
+  "webhookUrl": "",
+  "useWebhookForChat": false,
+  "useWebhookForEvents": false,
+  "statusEnabled": true,
+  "statusUpdateIntervalSeconds": 60
+}
+```
+
+Notas:
+- `channelsIds` mapeia **idioma → canal**. Se não houver canal para o idioma, ele não envia.
+- Você pode usar **bot** (via `botToken`) ou **webhook** (`webhookUrl`, `useWebhookForChat`, `useWebhookForEvents`).
+- Para Discord funcionar, o `.jar` precisa conter as dependências da JDA (fat jar) **ou** a JDA deve estar no classpath do plugin.
 
 Comandos
 --------
@@ -134,8 +184,8 @@ Comandos
 - `/l auto` ou `/l default` ou `/l padrao` | Remove idioma personalizado e volta ao padrão.
 - `/treload` | Recarrega o `translator_config.json` e a lista de idiomas.
 
-Idiomas suportados pela OpenAI (códigos + variantes):
-------------------------------------------------------------
+Idiomas suportados pela OpenAI (códigos + variantes)
+----------------------------------------------------
 
 - Português: `pt-BR`, `pt-PT`, `pt-AO`, `pt-MZ`
 - Inglês: `en-US`, `en-GB`, `en-CA`, `en-AU`, `en-IN`, `en-NZ`, `en-IE`, `en-ZA`
@@ -291,6 +341,33 @@ Principais comportamentos (em `API/tradutor.py`):
 - Para jogadores no mesmo idioma do remetente, retorna texto original exatamente igual.
 - Se a OpenAI falhar ou retornar JSON inválido, faz fallback para texto original.
 
+Compilação (Windows / PowerShell)
+---------------------------------
+
+1) Compile as classes (precisa do `HytaleServer.jar` e da JDA):
+
+```
+$src = Get-ChildItem -Recurse -Filter *.java -Path Tradutor\com | ForEach-Object { $_.FullName }
+javac -cp "..\HytaleServer.jar;..\DiscordLink.jar" -d "Tradutor\build\classes" $src
+```
+
+2) Empacote o plugin (manifesto no root):
+
+```
+jar cfm "..\TradutorUniversal.jar" "Tradutor\META-INF\MANIFEST.MF" -C "Tradutor\build\classes" . -C "Tradutor" manifest.json
+```
+
+3) (Opcional) Fat jar com Discord embutido:
+- Extraia um jar que já tenha JDA e mescle o conteúdo:
+
+```
+mkdir _jda_tmp
+cd _jda_tmp
+jar xf ..\..\DiscordLink.jar
+cd ..
+jar cfm "..\TradutorUniversal.jar" "Tradutor\META-INF\MANIFEST.MF" -C "Tradutor\build\classes" . -C "Tradutor" manifest.json -C "_jda_tmp" com -C "_jda_tmp" gnu -C "_jda_tmp" google -C "_jda_tmp" javax -C "_jda_tmp" kotlin -C "_jda_tmp" net/dv8tion -C "_jda_tmp" okhttp3 -C "_jda_tmp" okio -C "_jda_tmp" org -C "_jda_tmp" META-INF/services -C "_jda_tmp" META-INF/versions
+```
+
 Limites e comportamento de fallback
 -----------------------------------
 
@@ -308,6 +385,7 @@ Plugin:
 - `Tradutor/com/jogandobem/TranslationSocketClient.java` - cliente WebSocket.
 - `Tradutor/com/jogandobem/LanguageStore.java` - idiomas por jogador.
 - `Tradutor/com/jogandobem/TranslationConfig.java` - configuração.
+- `Tradutor/com/jogandobem/discord/` - integração com Discord.
 
 API:
 - `API/tradutor.py` - servidor FastAPI e integração OpenAI.
@@ -322,6 +400,15 @@ Segurança e privacidade
 
 Problemas comuns
 ----------------
+
+- **Plugin não carrega (Failed to load manifest file)**  
+  Garanta que `manifest.json` está na raiz do `.jar`.
+
+- **Discord não funciona (NoClassDefFoundError JDABuilder)**  
+  A JDA não está no classpath. Use fat jar ou inclua JDA no classpath do plugin.
+
+- **Auto-detecção por IP não funciona**  
+  Verifique `ipinfo_token`, se o jogador já tem entrada em `languages.json`, e os logs `ChatTranslation ...`.
 
 - **Outros jogadores não recebem mensagens**  
   Verifique `ws_url` e se a API está rodando. O plugin cancela o chat original.
