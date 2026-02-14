@@ -3,6 +3,7 @@ G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\IpInfoService.java
 G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\LanguageCatalog.java
 G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\LanguageStore.java
 G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\MessageStore.java
+G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\OpenAiTranslationService.java
 G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\PendingChatStore.java
 G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\SocketModels.java
 G:\DEV\Hytale\TradutorUniversal\Tradutor\com\jogandobem\TradutorUniversal.java

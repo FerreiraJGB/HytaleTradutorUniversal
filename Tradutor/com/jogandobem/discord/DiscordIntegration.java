@@ -1,6 +1,7 @@
 package com.jogandobem.discord;
 
 import com.jogandobem.LanguageStore;
+import com.jogandobem.OpenAiTranslationService;
 import com.jogandobem.SocketModels.ChatPayload;
 import com.jogandobem.TranslationConfig;
 import com.jogandobem.TranslationModels.TranslationResponse;
@@ -38,6 +39,7 @@ public final class DiscordIntegration {
    private final LanguageStore languageStore;
    private TranslationConfig translationConfig;
    private TranslationSocketClient socketClient;
+   private OpenAiTranslationService openAiTranslationService;
    private DiscordConfig config;
    private DiscordBot bot;
    private DiscordWebhookManager webhookManager;
@@ -63,6 +65,10 @@ public final class DiscordIntegration {
 
    public void setSocketClient(TranslationSocketClient socketClient) {
       this.socketClient = socketClient;
+   }
+
+   public void setOpenAiTranslationService(OpenAiTranslationService openAiTranslationService) {
+      this.openAiTranslationService = openAiTranslationService;
    }
 
    public void start(JavaPlugin plugin) {
@@ -244,7 +250,14 @@ public final class DiscordIntegration {
          return;
       }
 
-      if (this.socketClient == null || this.translationConfig == null || !this.translationConfig.isApiConfigured()) {
+      boolean canUseOpenAi = this.openAiTranslationService != null
+            && this.translationConfig != null
+            && this.translationConfig.isDirectTranslationConfigured();
+      boolean canUseWs = this.socketClient != null
+            && this.translationConfig != null
+            && this.translationConfig.isWsConfigured();
+
+      if (!canUseOpenAi && !canUseWs) {
          if (this.broadcaster != null) {
             this.broadcaster.broadcastToGame(username, message);
          }
@@ -263,6 +276,17 @@ public final class DiscordIntegration {
       payload.jogador = username == null ? "" : username;
       payload.jogadorUuid = "";
       payload.jogadoresOnline = targets;
+
+      if (canUseOpenAi) {
+         this.openAiTranslationService.translateAsync(payload)
+               .thenAccept(response -> handleTranslatedDiscordToGame(messageId, response))
+               .exceptionally(err -> {
+                  ((Api) this.logger.atWarning().withCause(err)).log("Discord OpenAI translation failed");
+                  handleTranslatedDiscordToGame(messageId, this.openAiTranslationService.buildFallbackResponse(payload));
+                  return null;
+               });
+         return;
+      }
 
       String json = this.gson.toJson(payload);
       this.socketClient.sendChat(json);

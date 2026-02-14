@@ -2,6 +2,7 @@ package com.jogandobem;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.annotations.SerializedName;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -51,6 +52,12 @@ public final class TranslationConfig {
    @SerializedName("pending_ttl_seconds")
    public int pendingTtlSeconds;
 
+   @SerializedName("openai_api_key")
+   public String openAiApiKey;
+
+   @SerializedName("openai_model")
+   public String openAiModel;
+
    public static TranslationConfig loadOrCreate(Path dataDir, HytaleLogger logger) {
       Gson gson = new GsonBuilder().setPrettyPrinting().create();
       TranslationConfig defaults = defaultConfig();
@@ -85,7 +92,19 @@ public final class TranslationConfig {
    }
 
    public boolean isApiConfigured() {
+      return isWsConfigured();
+   }
+
+   public boolean isWsConfigured() {
       return this.wsUrl != null && !this.wsUrl.isBlank() && this.serverId != null && !this.serverId.isBlank();
+   }
+
+   public boolean hasOpenAiApiKey() {
+      return this.openAiApiKey != null && !this.openAiApiKey.isBlank();
+   }
+
+   public boolean isDirectTranslationConfigured() {
+      return hasOpenAiApiKey();
    }
 
    public boolean hasIpInfoToken() {
@@ -108,6 +127,8 @@ public final class TranslationConfig {
       this.apiTimeoutMs = other.apiTimeoutMs;
       this.wsReconnectSeconds = other.wsReconnectSeconds;
       this.pendingTtlSeconds = other.pendingTtlSeconds;
+      this.openAiApiKey = other.openAiApiKey;
+      this.openAiModel = other.openAiModel;
    }
 
    public String getEndpoint() {
@@ -123,18 +144,20 @@ public final class TranslationConfig {
 
    private static TranslationConfig defaultConfig() {
       TranslationConfig cfg = new TranslationConfig();
-      cfg.apiHost = "http://127.0.0.1:5521";
-      cfg.apiKey = "";
-      cfg.wsUrl = "ws://127.0.0.1:5521/ws";
-      cfg.serverId = "server-1";
-      cfg.serverSecret = "";
+      cfg.apiHost = null;
+      cfg.apiKey = null;
+      cfg.wsUrl = null;
+      cfg.serverId = null;
+      cfg.serverSecret = null;
       cfg.defaultLanguage = "auto";
       cfg.warnOnJoin = true;
-      cfg.warnMessage = "Servidor com traducao automatica. Use /l <codigo> para escolher o idioma.";
+      cfg.warnMessage = "Server with automatic translation. Use /l <code> to choose the language.";
       cfg.ipinfoToken = "";
       cfg.apiTimeoutMs = 60000;
       cfg.wsReconnectSeconds = 3;
       cfg.pendingTtlSeconds = 30;
+      cfg.openAiApiKey = "YOUR_OPENAI_API_KEY_HERE";
+      cfg.openAiModel = "gpt-5-nano";
       return cfg;
    }
 
@@ -172,11 +195,26 @@ public final class TranslationConfig {
       if (this.pendingTtlSeconds <= 0) {
          this.pendingTtlSeconds = defaults.pendingTtlSeconds;
       }
+      if (this.openAiApiKey == null) {
+         this.openAiApiKey = defaults.openAiApiKey;
+      }
+      if (this.openAiModel == null || this.openAiModel.isBlank()) {
+         this.openAiModel = defaults.openAiModel;
+      }
    }
 
    private static void writeConfig(Path path, TranslationConfig cfg, Gson gson, HytaleLogger logger) {
       try {
-         String json = gson.toJson(cfg);
+         JsonObject jsonObj = new JsonObject();
+         jsonObj.addProperty("default_language", cfg.defaultLanguage);
+         jsonObj.addProperty("warn_on_join", cfg.warnOnJoin);
+         jsonObj.addProperty("warn_message", cfg.warnMessage);
+         jsonObj.addProperty("ipinfo_token", cfg.ipinfoToken);
+         jsonObj.addProperty("api_timeout_ms", cfg.apiTimeoutMs);
+         jsonObj.addProperty("pending_ttl_seconds", cfg.pendingTtlSeconds);
+         jsonObj.addProperty("openai_api_key", cfg.openAiApiKey);
+         jsonObj.addProperty("openai_model", cfg.openAiModel);
+         String json = gson.toJson(jsonObj);
          Files.writeString(path, json, StandardCharsets.UTF_8, new OpenOption[0]);
       } catch (IOException e) {
          ((Api) logger.atWarning().withCause(e)).log("ChatTranslation failed to write translator_config.json");

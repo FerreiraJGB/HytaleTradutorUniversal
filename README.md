@@ -12,10 +12,11 @@ Visão geral
 O plugin cancela o chat original e:
 
 1. Envia a mensagem original **somente para o remetente** (para ele ver instantaneamente).
-2. Envia um payload via WebSocket para a API com a lista de jogadores e seus idiomas.
-3. Recebe a resposta com as traduções e entrega **mensagens traduzidas para o idioma selecionado de cada jogador individualmente**.
+2. Envia um payload com a lista de jogadores e seus idiomas.
+3. Traduz diretamente no próprio plugin (OpenAI via HTTPS) **ou** via WebSocket para API externa.
+4. Entrega **mensagens traduzidas para o idioma selecionado de cada jogador individualmente**.
 
-Se a API/WS não estiver configurada ou indisponível, o plugin **não retransmite o chat** para os outros jogadores (apenas o remetente verá a mensagem).
+Se nem OpenAI direto nem API/WS estiverem configurados, o plugin **não retransmite o chat** para os outros jogadores (apenas o remetente verá a mensagem).
 
 Estrutura do repositório
 ------------------------
@@ -105,34 +106,34 @@ Na primeira execução, o plugin cria `translator_config.json` na pasta de dados
 
 ```
 {
-  "api_host": "http://127.0.0.1:5521",
-  "api_key": "",
-  "ws_url": "ws://127.0.0.1:5521/ws",
-  "server_id": "server-1",
-  "server_secret": "",
   "default_language": "auto",
   "warn_on_join": true,
   "warn_message": "Servidor com traducao automatica. Use /l <codigo> para escolher o idioma.",
   "ipinfo_token": "",
   "api_timeout_ms": 60000,
-  "ws_reconnect_seconds": 3,
-  "pending_ttl_seconds": 30
+  "pending_ttl_seconds": 30,
+  "openai_api_key": "",
+  "openai_model": "gpt-5-nano"
 }
 ```
 
 Campos e função:
-- `api_host`: base HTTP (usado apenas pela classe `TranslationService`, atualmente não utilizada pelo fluxo do plugin).
-- `api_key`: enviado no request HTTP (não usado no WebSocket atual).
-- `ws_url`: URL WebSocket da API (obrigatório para o fluxo principal).
-- `server_id`: identificador do servidor (enviado no hello e no payload).
-- `server_secret`: enviado no hello; a API atual **não valida**.
 - `default_language`: idioma padrão quando o jogador não escolhe nenhum (ex.: `auto`, `pt`, `en`).
 - `warn_on_join`: envia aviso de tradução ao entrar.
 - `warn_message`: texto do aviso.
 - `ipinfo_token`: token do ipinfo.io para auto-detecção por IP.
-- `api_timeout_ms`: timeout de HTTP (caso use `TranslationService`).
-- `ws_reconnect_seconds`: intervalo de reconexão do WebSocket.
+- `api_timeout_ms`: timeout de HTTP para chamadas diretas da OpenAI.
 - `pending_ttl_seconds`: tempo máximo aguardando resposta de tradução por mensagem.
+- `openai_api_key`: chave da OpenAI para tradução direta no plugin (sem API Python).
+- `openai_model`: modelo da OpenAI usado no modo direto (padrão: `gpt-5-nano`).
+
+Campos opcionais de compatibilidade (modo legado via API/WS), se você quiser usar:
+- `api_host`
+- `api_key`
+- `ws_url`
+- `server_id`
+- `server_secret`
+- `ws_reconnect_seconds`
 
 O plugin também cria:
 - `languages.json` (idioma e IP por jogador).
@@ -264,12 +265,13 @@ Fluxo de tradução
 
 1) Jogador envia mensagem no chat.
 2) Plugin cancela o evento e envia a mensagem original apenas para o remetente.
-3) Plugin gera `message_id`, monta a lista de jogadores online com seus idiomas e envia via WS.
-4) API chama OpenAI e devolve `translations`.
-5) Plugin envia a mensagem traduzida para cada jogador (exceto o remetente).
+3) Plugin gera `message_id` e monta a lista de jogadores online com seus idiomas.
+4) Se `openai_api_key` estiver configurado, o plugin chama OpenAI diretamente.
+5) Caso contrário, usa WebSocket (`ws_url`) para API externa.
+6) Plugin envia a mensagem traduzida para cada jogador (exceto o remetente).
 
-Protocolo WebSocket
--------------------
+Protocolo WebSocket (modo legado)
+---------------------------------
 
 Handshake (cliente -> API):
 

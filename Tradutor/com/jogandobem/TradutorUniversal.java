@@ -22,6 +22,7 @@ public class TradutorUniversal extends JavaPlugin {
    private PendingChatStore pendingChatStore;
    private TranslationDispatcher translationDispatcher;
    private TranslationSocketClient socketClient;
+   private OpenAiTranslationService openAiTranslationService;
    private MessageStore messageStore;
    private IpInfoService ipInfoService;
    private ChatListener chatListener;
@@ -46,13 +47,24 @@ public class TradutorUniversal extends JavaPlugin {
          this.discordIntegration = null;
       }
       this.translationDispatcher = new TranslationDispatcher(this.pendingChatStore, this.getLogger(), this.discordIntegration);
+      this.openAiTranslationService = new OpenAiTranslationService(this.translationConfig, this.getLogger());
       this.socketClient = new TranslationSocketClient(this.translationConfig, this.getLogger(), this.translationDispatcher);
       if (this.discordIntegration != null) {
          this.discordIntegration.setSocketClient(this.socketClient);
+         this.discordIntegration.setOpenAiTranslationService(this.openAiTranslationService);
       }
       this.socketClient.start();
 
-      this.chatListener = new ChatListener(this.translationConfig, this.languageStore, this.socketClient, this.pendingChatStore, this.getLogger(), this.discordIntegration);
+      this.chatListener = new ChatListener(
+            this.translationConfig,
+            this.languageStore,
+            this.socketClient,
+            this.pendingChatStore,
+            this.openAiTranslationService,
+            this.translationDispatcher,
+            this.getLogger(),
+            this.discordIntegration
+      );
       this.getEventRegistry().registerGlobal(PlayerChatEvent.class, this.chatListener::onChatEvent);
 
       PlayerConnectListener connectListener = new PlayerConnectListener(this.translationConfig, this.languageStore, this.messageStore, this.ipInfoService, this.getLogger());
@@ -77,6 +89,9 @@ public class TradutorUniversal extends JavaPlugin {
       }
       if (this.pendingChatStore != null) {
          this.pendingChatStore.shutdown();
+      }
+      if (this.openAiTranslationService != null) {
+         this.openAiTranslationService.shutdown();
       }
    }
 

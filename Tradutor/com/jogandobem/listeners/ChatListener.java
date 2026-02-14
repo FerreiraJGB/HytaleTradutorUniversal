@@ -1,10 +1,12 @@
 package com.jogandobem.listeners;
 
 import com.jogandobem.LanguageStore;
+import com.jogandobem.OpenAiTranslationService;
 import com.jogandobem.PendingChatStore;
 import com.jogandobem.PendingChatStore.PendingChat;
 import com.jogandobem.SocketModels.ChatPayload;
 import com.jogandobem.TranslationConfig;
+import com.jogandobem.TranslationDispatcher;
 import com.jogandobem.TranslationModels.TranslationTarget;
 import com.jogandobem.TranslationSocketClient;
 import com.jogandobem.discord.DiscordIntegration;
@@ -29,6 +31,8 @@ public class ChatListener {
    private final LanguageStore languageStore;
    private final TranslationSocketClient socketClient;
    private final PendingChatStore pendingStore;
+   private final OpenAiTranslationService openAiTranslationService;
+   private final TranslationDispatcher translationDispatcher;
    private final HytaleLogger logger;
    private final DiscordIntegration discordIntegration;
    private final Gson gson = new Gson();
@@ -37,12 +41,16 @@ public class ChatListener {
                        LanguageStore languageStore,
                        TranslationSocketClient socketClient,
                        PendingChatStore pendingStore,
+                       OpenAiTranslationService openAiTranslationService,
+                       TranslationDispatcher translationDispatcher,
                        HytaleLogger logger,
                        DiscordIntegration discordIntegration) {
       this.config = config;
       this.languageStore = languageStore;
       this.socketClient = socketClient;
       this.pendingStore = pendingStore;
+      this.openAiTranslationService = openAiTranslationService;
+      this.translationDispatcher = translationDispatcher;
       this.logger = logger;
       this.discordIntegration = discordIntegration;
    }
@@ -122,11 +130,6 @@ public class ChatListener {
          return;
       }
 
-      if (!this.config.isApiConfigured()) {
-         ((Api) this.logger.atWarning()).log("ChatTranslation: ws not configured (ws_url/server_id)");
-         return;
-      }
-
       String messageId = generateMessageId();
       PendingChat pending = new PendingChat(sender, chatEvent.getFormatter(), sender.getUsername());
       this.pendingStore.put(messageId, pending);
@@ -140,6 +143,22 @@ public class ChatListener {
       payload.jogador = sender.getUsername() == null ? "" : sender.getUsername();
       payload.jogadorUuid = sender.getUuid() == null ? "" : sender.getUuid().toString();
       payload.jogadoresOnline = onlineList;
+
+      if (this.config.isDirectTranslationConfigured() && this.openAiTranslationService != null) {
+         this.openAiTranslationService.translateAsync(payload)
+               .thenAccept(response -> this.translationDispatcher.dispatch(messageId, response))
+               .exceptionally(err -> {
+                  ((Api) this.logger.atWarning().withCause(err)).log("ChatTranslation OpenAI dispatch failed");
+                  this.translationDispatcher.dispatch(messageId, this.openAiTranslationService.buildFallbackResponse(payload));
+                  return null;
+               });
+         return;
+      }
+
+      if (!this.config.isWsConfigured()) {
+         ((Api) this.logger.atWarning()).log("ChatTranslation disabled: configure openai_api_key or ws_url/server_id");
+         return;
+      }
 
       String json = this.gson.toJson(payload);
       this.socketClient.sendChat(json);
